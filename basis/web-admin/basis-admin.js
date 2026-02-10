@@ -43,6 +43,21 @@
   const fmtHuman = BK.fmtDateTime || ((d)=>{ if(!d) return "-"; const dt=new Date(d); return isNaN(+dt)?"-":dt.toLocaleString("no-NO"); });
   const safeLike=(s)=> (s||"").replace(/%/g,"").trim();
   const debounce = BK.debounce || ((fn,w=250)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),w); }; });
+  const isUuid = (s)=> /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+
+  function buildSearchOr(query){
+    const s = safeLike(query);
+    if (!s) return "";
+    const parts = [
+      `avfallsprod_kundenavn.ilike.%${s}%`,
+      `avfallsprod_orgnr.ilike.%${s}%`,
+      `avfallsprod_avtalenr.ilike.%${s}%`,
+      `prosjekt.ilike.%${s}%`,
+      `avfall_velg_type.ilike.%${s}%`
+    ];
+    if (isUuid(s)) parts.push(`account_id.eq.${s}`);
+    return parts.join(",");
+  }
 
   function statusPill(status, big=false){
     const s = status||"Under behandling";
@@ -98,6 +113,7 @@
   API.closeDrawer = ()=>closeDrawer();
   API.getSupabase = ()=>S.sb;
   API.getCurrent = ()=>S.current;
+  API.buildSearchOr = buildSearchOr;
 
   /* ---------------- Supabase client ---------------- */
   async function getSupabaseClient(){
@@ -296,19 +312,8 @@
         .order("created_at",{ascending:false})
         .range((S.page-1)*S.pageSize,(S.page*S.pageSize)-1);
 
-      if (S.q){
-        const s = safeLike(S.q);
-        if (s){
-          q = q.or([
-            `avfallsprod_kundenavn.ilike.%${s}%`,
-            `avfallsprod_orgnr.ilike.%${s}%`,
-            `avfallsprod_avtalenr.ilike.%${s}%`,
-            `account_id.ilike.%${s}%`,
-            `prosjekt.ilike.%${s}%`,
-            `avfall_velg_type.ilike.%${s}%`
-          ].join(","));
-        }
-      }
+      const searchOr = buildSearchOr(S.q);
+      if (searchOr) q = q.or(searchOr);
       if (S.tab && S.tab !== "all") {
         const today = isoDate(0);
         const soon = isoDate(STATS_SOON_DAYS);
@@ -367,17 +372,9 @@
   };
 
   function withSearch(q){
-    if (!S.q) return q;
-    const s = safeLike(S.q);
-    if (!s) return q;
-    return q.or([
-      `avfallsprod_kundenavn.ilike.%${s}%`,
-      `avfallsprod_orgnr.ilike.%${s}%`,
-      `avfallsprod_avtalenr.ilike.%${s}%`,
-      `account_id.ilike.%${s}%`,
-      `prosjekt.ilike.%${s}%`,
-      `avfall_velg_type.ilike.%${s}%`
-    ].join(","));
+    const searchOr = buildSearchOr(S.q);
+    if (!searchOr) return q;
+    return q.or(searchOr);
   }
 
   async function countRows(q){
@@ -614,10 +611,27 @@
                 </button>
               `).join("")}
             </div>
+
+            <div class="att-metrics">
+              ${[
+                { label: "Totalt", value: S.stats.total, sub: "Alle basiser" },
+                { label: "Godkjent", value: S.stats.approved, sub: "Godkjente" },
+                { label: "Aktive", value: S.stats.active, sub: "Gyldige nå" },
+                { label: "Utløper snart", value: S.stats.expiring, sub: "Innen 30 dager" },
+                { label: "Utløpt", value: S.stats.expired, sub: "Må oppdateres" },
+                { label: "Trenger mer info", value: S.stats.needsInfo, sub: "Krever oppfølging" },
+              ].map(item => `
+                <div class="att-metric">
+                  <div class="label">${esc(item.label)}</div>
+                  <div class="value">${item.value}</div>
+                  <div class="sub">${esc(item.sub)}</div>
+                </div>
+              `).join("")}
+            </div>
           `}
 
           ${S.loading ? `<div class="att-muted">Laster…</div>` : `
-            <div style="overflow:auto">
+            <div class="att-table-wrap">
               <table class="att-table">
                 <thead>
                   <tr>
@@ -967,17 +981,8 @@
                 .order("created_at",{ascending:false})
                 .range(from, from + pageSize - 1);
 
-              const s = (S.q||"").trim().replace(/%/g,"");
-              if (s){
-                q = q.or([
-                  `avfallsprod_kundenavn.ilike.%${s}%`,
-                  `avfallsprod_orgnr.ilike.%${s}%`,
-                  `avfallsprod_avtalenr.ilike.%${s}%`,
-                  `account_id.ilike.%${s}%`,
-                  `prosjekt.ilike.%${s}%`,
-                  `avfall_velg_type.ilike.%${s}%`
-                ].join(","));
-              }
+              const searchOr = API.buildSearchOr ? API.buildSearchOr(S.q) : "";
+              if (searchOr) q = q.or(searchOr);
               if (S.status) q = q.eq("review_status", S.status);
 
               const { data, error } = await q;

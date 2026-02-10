@@ -102,6 +102,139 @@
     }catch(_){}
   }
 
+  function getTabCounts(){
+    return {
+      "all": S.stats.total,
+      "status:Under behandling": S.stats.pending,
+      "status:Trenger mer info": S.stats.needsInfo,
+      "approved": S.stats.approved,
+      "active": S.stats.active,
+      "expiring": S.stats.expiring,
+      "expired": S.stats.expired,
+      "status:Avvist": S.stats.rejected,
+      "status:Arkivert": S.stats.archived
+    };
+  }
+
+  function getActiveCols(){
+    return COLUMN_DEFS.filter(c => S.columns.includes(c.key));
+  }
+
+  function setTableLoading(root, isLoading){
+    if (!root) return;
+    const wrap = root.querySelector("#att-table-wrap");
+    const mask = root.querySelector("#att-table-mask");
+    if (wrap) wrap.classList.toggle("is-loading", !!isLoading);
+    if (mask) mask.style.display = isLoading ? "flex" : "none";
+  }
+
+  function updateTabsUI(root){
+    if (!root) return;
+    const counts = getTabCounts();
+    root.querySelectorAll("[data-tab]").forEach(btn=>{
+      const key = btn.getAttribute("data-tab") || "all";
+      btn.classList.toggle("is-active", S.tab === key);
+      const c = btn.querySelector(".count");
+      if (c && counts[key] != null) c.textContent = counts[key];
+    });
+  }
+
+  function updateErrorUI(root){
+    if (!root) return;
+    const el = root.querySelector("#att-error");
+    if (!el) return;
+    el.innerHTML = S.error ? `<div class="att-error">${esc(S.error)}</div>` : "";
+  }
+
+  function previewHtml(row){
+    if (!row) {
+      return `
+        <div class="att-preview-card is-empty">
+          <div class="att-preview-title">Hurtigvisning</div>
+          <div class="att-preview-muted">Velg en rad for detaljer.</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="att-preview-card">
+        <div class="att-preview-head">
+          <div class="att-preview-title">${esc(row.avfallsprod_kundenavn || row.account_id || "-")}</div>
+          ${statusPill(row.review_status)}
+        </div>
+        <div class="att-preview-grid">
+          <div class="k">Prosjekt</div><div>${esc(row.prosjekt || "-")}</div>
+          <div class="k">Org.nr</div><div>${esc(row.avfallsprod_orgnr || "-")}</div>
+          <div class="k">Avtalenr</div><div>${esc(row.avfallsprod_avtalenr || "-")}</div>
+          <div class="k">Avfall</div><div>${esc(row.avfall_velg_type || "-")}</div>
+          <div class="k">Periode</div><div>${row.dato_fra?new Date(row.dato_fra).toLocaleDateString("no-NO"):"-"} – ${row.dato_til?new Date(row.dato_til).toLocaleDateString("no-NO"):"-"}</div>
+          <div class="k">Oppdatert</div><div>${esc(fmtHuman(row.updated_at || row.created_at))}</div>
+        </div>
+        <div class="att-preview-actions">
+          <button class="att-btn" data-preview-edit="${esc(row.id)}">Behandle</button>
+          <button class="att-btn ghost" data-preview-clear>Skjul</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function updatePreviewUI(root){
+    if (!root) return;
+    const panel = root.querySelector("#att-preview");
+    if (!panel) return;
+    const row = S.previewId ? S.rows.find(r => String(r.id) === String(S.previewId)) : null;
+    panel.innerHTML = previewHtml(row);
+  }
+
+  function updateTableUI(root){
+    if (!root) return;
+    const activeCols = getActiveCols();
+    const head = root.querySelector("#att-table-head");
+    if (head) {
+      head.innerHTML = `
+        <tr>
+          ${activeCols.map(c=>`<th>${esc(c.label)}</th>`).join("")}
+          <th></th>
+        </tr>
+      `;
+    }
+    const body = root.querySelector("#att-table-body");
+    if (!body) return;
+    const rowsHtml = S.rows.map(r=>{
+      const isPreview = String(S.previewId || "") === String(r.id);
+      return `
+        <tr data-preview="${esc(r.id)}" class="${isPreview ? "is-preview" : ""}">
+          ${activeCols.map(c=>`<td>${c.render(r)}</td>`).join("")}
+          <td><button class="att-btn ghost" data-edit="${esc(r.id)}">Rediger</button></td>
+        </tr>
+      `;
+    }).join("");
+    body.innerHTML = rowsHtml + (S.rows.length===0 && !S.loading ? `<tr><td colspan="${activeCols.length + 1}" class="att-muted">Ingen treff.</td></tr>` : ``);
+  }
+
+  function updatePaginationUI(root){
+    if (!root) return;
+    const prev = root.querySelector("#p-prev");
+    const next = root.querySelector("#p-next");
+    const text = root.querySelector("#att-page-text");
+    const max = Math.max(1, Math.ceil(S.total / S.pageSize));
+    if (prev) prev.disabled = S.page<=1 || S.loading;
+    if (next) next.disabled = S.page>=max || S.loading;
+    if (text) text.textContent = `Side ${S.page}${S.total?` av ${max}`:""}`;
+  }
+
+  function updateListUI(root){
+    updateErrorUI(root);
+    updateTableUI(root);
+    updatePaginationUI(root);
+    updatePreviewUI(root);
+  }
+
+  function ensurePreviewSelection(){
+    if (S.previewId && S.rows.some(r => String(r.id) === String(S.previewId))) return;
+    S.previewId = S.rows[0]?.id || null;
+  }
+
   /* ---------------- Global API for Script 2 ---------------- */
   window.AttBKAdmin = window.AttBKAdmin || {};
   const API = window.AttBKAdmin;
@@ -115,6 +248,7 @@
     q:"",
     tab:"all",
     rows:[], loading:false, error:"",
+    previewId:null,
     columns: loadColumnPrefs(),
     colMenuOpen:false,
     drawerOpen:false, current:null, saving:false,
@@ -338,7 +472,9 @@
     const ss = a?.selectionStart, se=a?.selectionEnd;
 
     S.loading = true;
-    render();
+    const root = document.getElementById("att-admin-bk-root");
+    const ready = root && root.querySelector("#att-table-wrap");
+    if (ready) setTableLoading(root, true);
 
     try{
       let q = S.sb.from("basiskarakteriseringer")
@@ -376,13 +512,22 @@
       S.rows = data||[];
       S.total = count||0;
       S.error = "";
+      ensurePreviewSelection();
       loadStats();
 
     }catch(e){
       S.error = e.message||String(e);
     }finally{
       S.loading = false;
-      render();
+      const root = document.getElementById("att-admin-bk-root");
+      const ready = root && root.querySelector("#att-table-wrap");
+      if (ready){
+        setTableLoading(root, false);
+        updateListUI(root);
+        updateTabsUI(root);
+      } else {
+        render();
+      }
 
       // restore focus
       if (activeId){
@@ -422,7 +567,6 @@
     const t = ++_statsToken;
     S.stats.loading = true;
     S.stats.error = "";
-    render();
 
     try{
       const today = isoDate(0);
@@ -484,7 +628,10 @@
       S.stats.loading = false;
       S.stats.error = e.message || String(e);
     }finally{
-      render();
+      const root = document.getElementById("att-admin-bk-root");
+      const ready = root && root.querySelector("#att-tabs");
+      if (ready) updateTabsUI(root);
+      else render();
     }
   }
 
@@ -611,57 +758,59 @@
     document.documentElement.classList.toggle("att-noscroll", !!S.drawerOpen);
     document.body.classList.toggle("att-noscroll", !!S.drawerOpen);
 
-    const activeCols = COLUMN_DEFS.filter(c => S.columns.includes(c.key));
+    const activeCols = getActiveCols();
     const tableHead = `
       <tr>
         ${activeCols.map(c=>`<th>${esc(c.label)}</th>`).join("")}
         <th></th>
       </tr>
     `;
-    const tableBody = S.rows.map(r=>`
-      <tr>
-        ${activeCols.map(c=>`<td>${c.render(r)}</td>`).join("")}
-        <td><button class="att-btn ghost" data-edit="${esc(r.id)}">Rediger</button></td>
-      </tr>
-    `).join("");
+    const tableBody = S.rows.map(r=>{
+      const isPreview = String(S.previewId || "") === String(r.id);
+      return `
+        <tr data-preview="${esc(r.id)}" class="${isPreview ? "is-preview" : ""}">
+          ${activeCols.map(c=>`<td>${c.render(r)}</td>`).join("")}
+          <td><button class="att-btn ghost" data-edit="${esc(r.id)}">Rediger</button></td>
+        </tr>
+      `;
+    }).join("");
+    const previewRow = S.previewId ? S.rows.find(r => String(r.id) === String(S.previewId)) : null;
 
     root.innerHTML = `
       <div class="att-card">
-        <div class="att-head">
-          <h3>Basiskarakteriseringer – Admin</h3>
-          <div class="att-row">
-            <input id="adm-q" class="att-input" type="search"
-              placeholder="Søk kunde / prosjekt / avfallstype / orgnr / avtalenr…"
-              value="${esc(S.q)}">
-            <div class="att-actions">
-              <div class="att-col-menu">
-                <button id="adm-cols" class="att-btn ghost" type="button">Kolonner</button>
-                <div id="adm-col-panel" class="att-col-panel ${S.colMenuOpen ? "is-open" : ""}">
-                  <div class="att-col-head">Vis kolonner</div>
-                  <div class="att-col-list">
-                    ${COLUMN_DEFS.map(c=>`
-                      <label class="att-col-item">
-                        <input type="checkbox" data-col="${esc(c.key)}" ${S.columns.includes(c.key) ? "checked" : ""}>
-                        <span>${esc(c.label)}</span>
-                      </label>
-                    `).join("")}
-                  </div>
-                  <div class="att-col-actions">
-                    <button class="att-btn ghost" type="button" data-col-preset="default">Standard</button>
-                    <button class="att-btn ghost" type="button" data-col-preset="all">Alle</button>
+        <div class="att-sticky">
+          <div class="att-head">
+            <h3>Basiskarakteriseringer – Admin</h3>
+            <div class="att-row">
+              <input id="adm-q" class="att-input" type="search"
+                placeholder="Søk kunde / prosjekt / avfallstype / orgnr / avtalenr…"
+                value="${esc(S.q)}">
+              <div class="att-actions">
+                <div class="att-col-menu">
+                  <button id="adm-cols" class="att-btn ghost" type="button">Kolonner</button>
+                  <div id="adm-col-panel" class="att-col-panel ${S.colMenuOpen ? "is-open" : ""}">
+                    <div class="att-col-head">Vis kolonner</div>
+                    <div class="att-col-list">
+                      ${COLUMN_DEFS.map(c=>`
+                        <label class="att-col-item">
+                          <input type="checkbox" data-col="${esc(c.key)}" ${S.columns.includes(c.key) ? "checked" : ""}>
+                          <span>${esc(c.label)}</span>
+                        </label>
+                      `).join("")}
+                    </div>
+                    <div class="att-col-actions">
+                      <button class="att-btn ghost" type="button" data-col-preset="default">Standard</button>
+                      <button class="att-btn ghost" type="button" data-col-preset="all">Alle</button>
+                    </div>
                   </div>
                 </div>
+                <div id="att-actions-slot"></div>
               </div>
-              <div id="att-actions-slot"></div>
             </div>
           </div>
-        </div>
 
-        <div class="att-body">
-          ${S.error ? `<div class="att-error" style="margin:10px 0 10px">${esc(S.error)}</div>` : ``}
-
-          ${S.stats.loading ? `<div class="att-muted">Laster oversikt…</div>` : S.stats.error ? `<div class="att-error" style="margin:10px 0 10px">${esc(S.stats.error)}</div>` : `
-            <div class="att-tabs">
+          <div class="att-filterbar">
+            <div id="att-tabs" class="att-tabs">
               ${[
                 { key: "all", label: "Alle", count: S.stats.total },
                 { key: "status:Under behandling", label: "Under behandling", count: S.stats.pending },
@@ -679,44 +828,39 @@
                 </button>
               `).join("")}
             </div>
-
-            <div class="att-metrics">
-              ${[
-                { label: "Totalt", value: S.stats.total, sub: "Alle basiser" },
-                { label: "Godkjent", value: S.stats.approved, sub: "Godkjente" },
-                { label: "Aktive", value: S.stats.active, sub: "Gyldige nå" },
-                { label: "Utløper snart", value: S.stats.expiring, sub: "Innen 30 dager" },
-                { label: "Utløpt", value: S.stats.expired, sub: "Må oppdateres" },
-                { label: "Trenger mer info", value: S.stats.needsInfo, sub: "Krever oppfølging" },
-              ].map(item => `
-                <div class="att-metric">
-                  <div class="label">${esc(item.label)}</div>
-                  <div class="value">${item.value}</div>
-                  <div class="sub">${esc(item.sub)}</div>
-                </div>
-              `).join("")}
-            </div>
-          `}
-
-          <div class="att-table-wrap ${S.loading ? "is-loading" : ""}">
-            ${S.loading ? `<div class="att-table-mask">Laster…</div>` : ``}
-            <table class="att-table">
-              <thead>
-                ${tableHead}
-              </thead>
-              <tbody>
-                ${tableBody}
-                ${S.rows.length===0 && !S.loading ? `<tr><td colspan="${activeCols.length + 1}" class="att-muted">Ingen treff.</td></tr>` : ``}
-              </tbody>
-            </table>
           </div>
+        </div>
 
-          <div class="att-foot">
-            <div class="att-pagination">
-              <button class="att-btn ghost" id="p-prev" ${(S.page<=1 || S.loading)?'disabled':''}>Forrige</button>
-              <span class="att-muted">Side ${S.page}${S.total?` av ${Math.max(1,Math.ceil(S.total/S.pageSize))}`:''}</span>
-              <button class="att-btn ghost" id="p-next" ${(S.page>=Math.max(1,Math.ceil(S.total/S.pageSize)) || S.loading)?'disabled':''}>Neste</button>
+        <div class="att-body">
+          <div id="att-error">${S.error ? `<div class="att-error">${esc(S.error)}</div>` : ``}</div>
+
+          <div class="att-layout">
+            <div class="att-main">
+              <div id="att-table-wrap" class="att-table-wrap">
+                <div id="att-table-mask" class="att-table-mask" style="display:${S.loading ? "flex" : "none"}">Laster…</div>
+                <table class="att-table">
+                  <thead id="att-table-head">
+                    ${tableHead}
+                  </thead>
+                  <tbody id="att-table-body">
+                    ${tableBody}
+                    ${S.rows.length===0 && !S.loading ? `<tr><td colspan="${activeCols.length + 1}" class="att-muted">Ingen treff.</td></tr>` : ``}
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="att-foot">
+                <div class="att-pagination">
+                  <button class="att-btn ghost" id="p-prev" ${(S.page<=1 || S.loading)?'disabled':''}>Forrige</button>
+                  <span id="att-page-text" class="att-muted">Side ${S.page}${S.total?` av ${Math.max(1,Math.ceil(S.total/S.pageSize))}`:''}</span>
+                  <button class="att-btn ghost" id="p-next" ${(S.page>=Math.max(1,Math.ceil(S.total/S.pageSize)) || S.loading)?'disabled':''}>Neste</button>
+                </div>
+              </div>
             </div>
+
+            <aside id="att-preview" class="att-preview">
+              ${previewHtml(previewRow)}
+            </aside>
           </div>
         </div>
       </div>
@@ -752,16 +896,41 @@
         if (S.tab === next) return;
         S.tab = next;
         S.page = 1;
+        updateTabsUI(root);
         silentFetchList();
       });
     });
 
-    root.querySelectorAll("[data-edit]").forEach(btn=>{
-      btn.addEventListener("click", ()=>openDrawer(btn.getAttribute("data-edit")));
-    });
-
     root.querySelector("#p-prev")?.addEventListener("click", ()=>{ if(S.page>1){ S.page--; silentFetchList(); }});
     root.querySelector("#p-next")?.addEventListener("click", ()=>{ const m=Math.max(1,Math.ceil(S.total/S.pageSize)); if(S.page<m){ S.page++; silentFetchList(); }});
+
+    const tbody = root.querySelector("#att-table-body");
+    tbody?.addEventListener("click", (e)=>{
+      const editBtn = e.target.closest("[data-edit]");
+      if (editBtn){
+        openDrawer(editBtn.getAttribute("data-edit"));
+        return;
+      }
+      const row = e.target.closest("tr[data-preview]");
+      if (!row) return;
+      S.previewId = row.getAttribute("data-preview");
+      updateTableUI(root);
+      updatePreviewUI(root);
+    });
+
+    root.querySelector("#att-preview")?.addEventListener("click", (e)=>{
+      const editBtn = e.target.closest("[data-preview-edit]");
+      if (editBtn){
+        openDrawer(editBtn.getAttribute("data-preview-edit"));
+        return;
+      }
+      const clearBtn = e.target.closest("[data-preview-clear]");
+      if (clearBtn){
+        S.previewId = null;
+        updatePreviewUI(root);
+        updateTableUI(root);
+      }
+    });
 
     const colBtn = root.querySelector("#adm-cols");
     const colPanel = root.querySelector("#adm-col-panel");

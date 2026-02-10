@@ -3,6 +3,7 @@
   const CFG = {
     SUPABASE_URL: SC?.dataset?.supaUrl || "",
     SUPABASE_ANON: SC?.dataset?.supaAnon || "",
+    SUPABASE_SCHEMA: SC?.dataset?.supaSchema || "",
   };
 
   if (!window.BKCore) {
@@ -236,14 +237,20 @@
 
       const s = (S.query || "").trim().replace(/%/g, "");
       if (s) {
-        q = q.or([
+        const orParts = [
           `avfallsprod_kundenavn.ilike.%${s}%`,
           `avfallsprod_orgnr.ilike.%${s}%`,
           `avfallsprod_avtalenr.ilike.%${s}%`,
-          `account_id.ilike.%${s}%`,
           `prosjekt.ilike.%${s}%`,
           `avfall_velg_type.ilike.%${s}%`,
-        ].join(","));
+        ];
+
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+        if (isUuid) {
+          orParts.push(`account_id.eq.${s}`);
+        }
+
+        q = q.or(orParts.join(","));
       }
 
       const { data, error } = await q;
@@ -308,7 +315,11 @@
         supabaseAnon: CFG.SUPABASE_ANON,
         requireSession: false,
       });
-      S.sb = sb;
+      if (CFG.SUPABASE_SCHEMA) {
+        S.sb = typeof sb.schema === "function" ? sb.schema(CFG.SUPABASE_SCHEMA) : sb;
+      } else {
+        S.sb = sb;
+      }
 
       // Optional admin check (non-fatal if RPC missing)
       try {

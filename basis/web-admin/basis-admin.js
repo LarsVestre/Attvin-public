@@ -44,6 +44,8 @@
   const safeLike=(s)=> (s||"").replace(/%/g,"").trim();
   const debounce = BK.debounce || ((fn,w=250)=>{ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),w); }; });
   const isUuid = (s)=> /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+  const boolLabel = (v)=> (v === true ? "Ja" : v === false ? "Nei" : "-");
+  const arrLabel = (v)=> Array.isArray(v) ? v.join(", ") : (v == null || v === "" ? "-" : String(v));
 
   function buildSearchOr(query){
     const s = safeLike(query);
@@ -79,6 +81,45 @@
     { key: "status", label: "Status", render: (r)=> statusPill(r.review_status) },
     { key: "periode", label: "Dato (fra–til)", render: (r)=> `${r.dato_fra?new Date(r.dato_fra).toLocaleDateString('no-NO'):'-'} – ${r.dato_til?new Date(r.dato_til).toLocaleDateString('no-NO'):'-'}` },
     { key: "oppdatert", label: "Oppdatert", render: (r)=> esc(fmtHuman(r.updated_at || r.created_at)) },
+    { key: "id", label: "ID", render: (r)=> esc(r.id || "-") },
+    { key: "user_id", label: "User ID", render: (r)=> esc(r.user_id || "-") },
+    { key: "account_id", label: "Account ID", render: (r)=> esc(r.account_id || "-") },
+    { key: "submission_status", label: "Submission status", render: (r)=> esc(r.submission_status || "-") },
+    { key: "leveransetype", label: "Leveransetype", render: (r)=> esc(r.leveransetype || "-") },
+    { key: "prosjekt_id", label: "Prosjekt-ID", render: (r)=> esc(r.prosjekt_id || "-") },
+    { key: "dato_fra", label: "Dato fra", render: (r)=> esc(fmtDate(r.dato_fra)) },
+    { key: "dato_til", label: "Dato til", render: (r)=> esc(fmtDate(r.dato_til)) },
+    { key: "avfall_grad", label: "Avfall grad", render: (r)=> esc(r.avfall_grad || "-") },
+    { key: "eal", label: "EAL", render: (r)=> esc(r.eal || "-") },
+    { key: "varekode", label: "Varekode", render: (r)=> esc(r.varekode || "-") },
+    { key: "ns_kode", label: "NS-kode", render: (r)=> esc(r.ns_kode || "-") },
+    { key: "mangler_analyse", label: "Mangler analyse", render: (r)=> esc(boolLabel(r.mangler_analyse)) },
+    { key: "filer_basis", label: "Filer basis", render: (r)=> esc(arrLabel(r.filer_basis)) },
+    { key: "avfall_egenskaper_fysisk", label: "Avfall egenskaper (fysisk)", render: (r)=> esc(arrLabel(r.avfall_egenskaper_fysisk)) },
+    { key: "avfall_egenskaper_fysisk_annet", label: "Avfall egenskaper (annet)", render: (r)=> esc(r.avfall_egenskaper_fysisk_annet || "-") },
+    { key: "avfall_egenskaper_forbehandling", label: "Forbehandling", render: (r)=> esc(r.avfall_egenskaper_forbehandling || "-") },
+    { key: "avfall_egenskaper_forbehandling_annet", label: "Forbehandling (annet)", render: (r)=> esc(r.avfall_egenskaper_forbehandling_annet || "-") },
+    { key: "avfall_egenskaper_naeringskode", label: "Næringskode (topp)", render: (r)=> esc(r.avfall_egenskaper_naeringskode || "-") },
+    { key: "naeringskode", label: "Næringskode", render: (r)=> esc(r.naeringskode || "-") },
+    { key: "avfall_lukten", label: "Lukt", render: (r)=> esc(r.avfall_lukten || "-") },
+    { key: "avfall_fargen", label: "Farge", render: (r)=> esc(r.avfall_fargen || "-") },
+    { key: "avfall_egenskaper_forbudt_deponering", label: "Forbudt deponering", render: (r)=> esc(r.avfall_egenskaper_forbudt_deponering || "-") },
+    { key: "avfall_industri", label: "Industri", render: (r)=> esc(r.avfall_industri || "-") },
+    { key: "innhold_farlig", label: "Innhold farlig", render: (r)=> esc(arrLabel(r.innhold_farlig)) },
+    { key: "forhandsregler_deponi", label: "Forhåndsregler deponi", render: (r)=> esc(r.forhandsregler_deponi || "-") },
+    { key: "transportor_kundenavn_valg", label: "Transportør kundenavn valg", render: (r)=> esc(r.transportor_kundenavn_valg || "-") },
+    { key: "transportor_navn", label: "Transportør navn", render: (r)=> esc(r.transportor_navn || "-") },
+    { key: "kontaktperson", label: "Kontaktperson", render: (r)=> esc(r.kontaktperson || "-") },
+    { key: "epost", label: "E-post", render: (r)=> esc(r.epost || "-") },
+    { key: "telefonnummer", label: "Telefon", render: (r)=> esc(r.telefonnummer || "-") },
+    { key: "review_note", label: "Notat", render: (r)=> esc(r.review_note || "-") },
+    { key: "reviewed_by", label: "Behandlet av", render: (r)=> esc(r.reviewed_by || "-") },
+    { key: "reviewed_at", label: "Behandlet", render: (r)=> esc(fmtHuman(r.reviewed_at)) },
+    { key: "created_at", label: "Opprettet", render: (r)=> esc(fmtHuman(r.created_at)) },
+    { key: "updated_at", label: "Oppdatert (raw)", render: (r)=> esc(fmtHuman(r.updated_at)) },
+    { key: "last_updated", label: "Sist oppdatert", render: (r)=> esc(fmtHuman(r.last_updated)) },
+    { key: "pdf_storage_path", label: "PDF path", render: (r)=> esc(r.pdf_storage_path || "-") },
+    { key: "pdf_generated_at", label: "PDF generert", render: (r)=> esc(fmtHuman(r.pdf_generated_at)) },
   ];
   const DEFAULT_COLUMNS = ["kunde","prosjekt","avfallstype","status","periode"];
 
@@ -146,46 +187,6 @@
     el.innerHTML = S.error ? `<div class="att-error">${esc(S.error)}</div>` : "";
   }
 
-  function previewHtml(row){
-    if (!row) {
-      return `
-        <div class="att-preview-card is-empty">
-          <div class="att-preview-title">Hurtigvisning</div>
-          <div class="att-preview-muted">Velg en rad for detaljer.</div>
-        </div>
-      `;
-    }
-
-    return `
-      <div class="att-preview-card">
-        <div class="att-preview-head">
-          <div class="att-preview-title">${esc(row.avfallsprod_kundenavn || row.account_id || "-")}</div>
-          ${statusPill(row.review_status)}
-        </div>
-        <div class="att-preview-grid">
-          <div class="k">Prosjekt</div><div>${esc(row.prosjekt || "-")}</div>
-          <div class="k">Org.nr</div><div>${esc(row.avfallsprod_orgnr || "-")}</div>
-          <div class="k">Avtalenr</div><div>${esc(row.avfallsprod_avtalenr || "-")}</div>
-          <div class="k">Avfall</div><div>${esc(row.avfall_velg_type || "-")}</div>
-          <div class="k">Periode</div><div>${row.dato_fra?new Date(row.dato_fra).toLocaleDateString("no-NO"):"-"} – ${row.dato_til?new Date(row.dato_til).toLocaleDateString("no-NO"):"-"}</div>
-          <div class="k">Oppdatert</div><div>${esc(fmtHuman(row.updated_at || row.created_at))}</div>
-        </div>
-        <div class="att-preview-actions">
-          <button class="att-btn" data-preview-edit="${esc(row.id)}">Behandle</button>
-          <button class="att-btn ghost" data-preview-clear>Skjul</button>
-        </div>
-      </div>
-    `;
-  }
-
-  function updatePreviewUI(root){
-    if (!root) return;
-    const panel = root.querySelector("#att-preview");
-    if (!panel) return;
-    const row = S.previewId ? S.rows.find(r => String(r.id) === String(S.previewId)) : null;
-    panel.innerHTML = previewHtml(row);
-  }
-
   function updateTableUI(root){
     if (!root) return;
     const activeCols = getActiveCols();
@@ -200,15 +201,12 @@
     }
     const body = root.querySelector("#att-table-body");
     if (!body) return;
-    const rowsHtml = S.rows.map(r=>{
-      const isPreview = String(S.previewId || "") === String(r.id);
-      return `
-        <tr data-preview="${esc(r.id)}" class="${isPreview ? "is-preview" : ""}">
-          ${activeCols.map(c=>`<td>${c.render(r)}</td>`).join("")}
-          <td><button class="att-btn ghost" data-edit="${esc(r.id)}">Rediger</button></td>
-        </tr>
-      `;
-    }).join("");
+    const rowsHtml = S.rows.map(r=>`
+      <tr>
+        ${activeCols.map(c=>`<td>${c.render(r)}</td>`).join("")}
+        <td><button class="att-btn ghost" data-edit="${esc(r.id)}">Rediger</button></td>
+      </tr>
+    `).join("");
     body.innerHTML = rowsHtml + (S.rows.length===0 && !S.loading ? `<tr><td colspan="${activeCols.length + 1}" class="att-muted">Ingen treff.</td></tr>` : ``);
   }
 
@@ -227,12 +225,6 @@
     updateErrorUI(root);
     updateTableUI(root);
     updatePaginationUI(root);
-    updatePreviewUI(root);
-  }
-
-  function ensurePreviewSelection(){
-    if (S.previewId && S.rows.some(r => String(r.id) === String(S.previewId))) return;
-    S.previewId = S.rows[0]?.id || null;
   }
 
   /* ---------------- Global API for Script 2 ---------------- */
@@ -248,7 +240,6 @@
     q:"",
     tab:"all",
     rows:[], loading:false, error:"",
-    previewId:null,
     columns: loadColumnPrefs(),
     colMenuOpen:false,
     drawerOpen:false, current:null, saving:false,
@@ -478,7 +469,7 @@
 
     try{
       let q = S.sb.from("basiskarakteriseringer")
-        .select("id,avfallsprod_kundenavn,avfallsprod_orgnr,avfallsprod_avtalenr,prosjekt,avfall_velg_type,review_status,dato_fra,dato_til,created_at,updated_at,account_id", { count:"exact" })
+        .select("*", { count:"exact" })
         .order("created_at",{ascending:false})
         .range((S.page-1)*S.pageSize,(S.page*S.pageSize)-1);
 
@@ -512,7 +503,6 @@
       S.rows = data||[];
       S.total = count||0;
       S.error = "";
-      ensurePreviewSelection();
       loadStats();
 
     }catch(e){
@@ -727,6 +717,10 @@
     };
 
     payload = applyCodesFromCatalog(payload);
+    if (payload.review_status && payload.review_status !== (S.current.review_status || "")) {
+      payload.reviewed_by = S.me?.name || S.me?.email || S.me?.sub || null;
+      payload.reviewed_at = new Date().toISOString();
+    }
 
     S.saving=true; S.error=""; render();
     try{
@@ -765,16 +759,12 @@
         <th></th>
       </tr>
     `;
-    const tableBody = S.rows.map(r=>{
-      const isPreview = String(S.previewId || "") === String(r.id);
-      return `
-        <tr data-preview="${esc(r.id)}" class="${isPreview ? "is-preview" : ""}">
-          ${activeCols.map(c=>`<td>${c.render(r)}</td>`).join("")}
-          <td><button class="att-btn ghost" data-edit="${esc(r.id)}">Rediger</button></td>
-        </tr>
-      `;
-    }).join("");
-    const previewRow = S.previewId ? S.rows.find(r => String(r.id) === String(S.previewId)) : null;
+    const tableBody = S.rows.map(r=>`
+      <tr>
+        ${activeCols.map(c=>`<td>${c.render(r)}</td>`).join("")}
+        <td><button class="att-btn ghost" data-edit="${esc(r.id)}">Rediger</button></td>
+      </tr>
+    `).join("");
 
     root.innerHTML = `
       <div class="att-card">
@@ -834,33 +824,25 @@
         <div class="att-body">
           <div id="att-error">${S.error ? `<div class="att-error">${esc(S.error)}</div>` : ``}</div>
 
-          <div class="att-layout">
-            <div class="att-main">
-              <div id="att-table-wrap" class="att-table-wrap">
-                <div id="att-table-mask" class="att-table-mask" style="display:${S.loading ? "flex" : "none"}">Laster…</div>
-                <table class="att-table">
-                  <thead id="att-table-head">
-                    ${tableHead}
-                  </thead>
-                  <tbody id="att-table-body">
-                    ${tableBody}
-                    ${S.rows.length===0 && !S.loading ? `<tr><td colspan="${activeCols.length + 1}" class="att-muted">Ingen treff.</td></tr>` : ``}
-                  </tbody>
-                </table>
-              </div>
+          <div id="att-table-wrap" class="att-table-wrap">
+            <div id="att-table-mask" class="att-table-mask" style="display:${S.loading ? "flex" : "none"}">Laster…</div>
+            <table class="att-table">
+              <thead id="att-table-head">
+                ${tableHead}
+              </thead>
+              <tbody id="att-table-body">
+                ${tableBody}
+                ${S.rows.length===0 && !S.loading ? `<tr><td colspan="${activeCols.length + 1}" class="att-muted">Ingen treff.</td></tr>` : ``}
+              </tbody>
+            </table>
+          </div>
 
-              <div class="att-foot">
-                <div class="att-pagination">
-                  <button class="att-btn ghost" id="p-prev" ${(S.page<=1 || S.loading)?'disabled':''}>Forrige</button>
-                  <span id="att-page-text" class="att-muted">Side ${S.page}${S.total?` av ${Math.max(1,Math.ceil(S.total/S.pageSize))}`:''}</span>
-                  <button class="att-btn ghost" id="p-next" ${(S.page>=Math.max(1,Math.ceil(S.total/S.pageSize)) || S.loading)?'disabled':''}>Neste</button>
-                </div>
-              </div>
+          <div class="att-foot">
+            <div class="att-pagination">
+              <button class="att-btn ghost" id="p-prev" ${(S.page<=1 || S.loading)?'disabled':''}>Forrige</button>
+              <span id="att-page-text" class="att-muted">Side ${S.page}${S.total?` av ${Math.max(1,Math.ceil(S.total/S.pageSize))}`:''}</span>
+              <button class="att-btn ghost" id="p-next" ${(S.page>=Math.max(1,Math.ceil(S.total/S.pageSize)) || S.loading)?'disabled':''}>Neste</button>
             </div>
-
-            <aside id="att-preview" class="att-preview">
-              ${previewHtml(previewRow)}
-            </aside>
           </div>
         </div>
       </div>
@@ -907,29 +889,7 @@
     const tbody = root.querySelector("#att-table-body");
     tbody?.addEventListener("click", (e)=>{
       const editBtn = e.target.closest("[data-edit]");
-      if (editBtn){
-        openDrawer(editBtn.getAttribute("data-edit"));
-        return;
-      }
-      const row = e.target.closest("tr[data-preview]");
-      if (!row) return;
-      S.previewId = row.getAttribute("data-preview");
-      updateTableUI(root);
-      updatePreviewUI(root);
-    });
-
-    root.querySelector("#att-preview")?.addEventListener("click", (e)=>{
-      const editBtn = e.target.closest("[data-preview-edit]");
-      if (editBtn){
-        openDrawer(editBtn.getAttribute("data-preview-edit"));
-        return;
-      }
-      const clearBtn = e.target.closest("[data-preview-clear]");
-      if (clearBtn){
-        S.previewId = null;
-        updatePreviewUI(root);
-        updateTableUI(root);
-      }
+      if (editBtn) openDrawer(editBtn.getAttribute("data-edit"));
     });
 
     const colBtn = root.querySelector("#adm-cols");

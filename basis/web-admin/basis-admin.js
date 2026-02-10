@@ -70,6 +70,38 @@
     return `<span class="att-pill att-status ${cls}" ${style}><span class="dot ${dot}"></span>${esc(s)}</span>`;
   }
 
+  const COLUMN_DEFS = [
+    { key: "kunde", label: "Kunde", render: (r)=> esc(r.avfallsprod_kundenavn || r.account_id || "-") },
+    { key: "orgnr", label: "Org.nr", render: (r)=> esc(r.avfallsprod_orgnr || "-") },
+    { key: "avtalenr", label: "Avtalenr", render: (r)=> esc(r.avfallsprod_avtalenr || "-") },
+    { key: "prosjekt", label: "Prosjekt", render: (r)=> esc(r.prosjekt || "-") },
+    { key: "avfallstype", label: "Avfallstype", render: (r)=> esc(r.avfall_velg_type || "-") },
+    { key: "status", label: "Status", render: (r)=> statusPill(r.review_status) },
+    { key: "periode", label: "Dato (fra–til)", render: (r)=> `${r.dato_fra?new Date(r.dato_fra).toLocaleDateString('no-NO'):'-'} – ${r.dato_til?new Date(r.dato_til).toLocaleDateString('no-NO'):'-'}` },
+    { key: "oppdatert", label: "Oppdatert", render: (r)=> esc(fmtHuman(r.updated_at || r.created_at)) },
+  ];
+  const DEFAULT_COLUMNS = ["kunde","prosjekt","avfallstype","status","periode"];
+
+  function loadColumnPrefs(){
+    try{
+      const raw = localStorage.getItem("att-bk-admin-columns");
+      if (!raw) return DEFAULT_COLUMNS.slice();
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return DEFAULT_COLUMNS.slice();
+      const allowed = new Set(COLUMN_DEFS.map(c=>c.key));
+      const filtered = parsed.filter(k=>allowed.has(k));
+      return filtered.length ? filtered : DEFAULT_COLUMNS.slice();
+    }catch(_){
+      return DEFAULT_COLUMNS.slice();
+    }
+  }
+
+  function saveColumnPrefs(cols){
+    try{
+      localStorage.setItem("att-bk-admin-columns", JSON.stringify(cols));
+    }catch(_){}
+  }
+
   /* ---------------- Global API for Script 2 ---------------- */
   window.AttBKAdmin = window.AttBKAdmin || {};
   const API = window.AttBKAdmin;
@@ -83,6 +115,8 @@
     q:"",
     tab:"all",
     rows:[], loading:false, error:"",
+    columns: loadColumnPrefs(),
+    colMenuOpen:false,
     drawerOpen:false, current:null, saving:false,
     katalog:[], katByType:new Map(), katTypes:[],
     toast:"",
@@ -577,6 +611,20 @@
     document.documentElement.classList.toggle("att-noscroll", !!S.drawerOpen);
     document.body.classList.toggle("att-noscroll", !!S.drawerOpen);
 
+    const activeCols = COLUMN_DEFS.filter(c => S.columns.includes(c.key));
+    const tableHead = `
+      <tr>
+        ${activeCols.map(c=>`<th>${esc(c.label)}</th>`).join("")}
+        <th></th>
+      </tr>
+    `;
+    const tableBody = S.rows.map(r=>`
+      <tr>
+        ${activeCols.map(c=>`<td>${c.render(r)}</td>`).join("")}
+        <td><button class="att-btn ghost" data-edit="${esc(r.id)}">Rediger</button></td>
+      </tr>
+    `).join("");
+
     root.innerHTML = `
       <div class="att-card">
         <div class="att-head">
@@ -585,7 +633,27 @@
             <input id="adm-q" class="att-input" type="search"
               placeholder="Søk kunde / prosjekt / avfallstype / orgnr / avtalenr…"
               value="${esc(S.q)}">
-            <div id="att-actions-slot"></div>
+            <div class="att-actions">
+              <div class="att-col-menu">
+                <button id="adm-cols" class="att-btn ghost" type="button">Kolonner</button>
+                <div id="adm-col-panel" class="att-col-panel ${S.colMenuOpen ? "is-open" : ""}">
+                  <div class="att-col-head">Vis kolonner</div>
+                  <div class="att-col-list">
+                    ${COLUMN_DEFS.map(c=>`
+                      <label class="att-col-item">
+                        <input type="checkbox" data-col="${esc(c.key)}" ${S.columns.includes(c.key) ? "checked" : ""}>
+                        <span>${esc(c.label)}</span>
+                      </label>
+                    `).join("")}
+                  </div>
+                  <div class="att-col-actions">
+                    <button class="att-btn ghost" type="button" data-col-preset="default">Standard</button>
+                    <button class="att-btn ghost" type="button" data-col-preset="all">Alle</button>
+                  </div>
+                </div>
+              </div>
+              <div id="att-actions-slot"></div>
+            </div>
           </div>
         </div>
 
@@ -630,43 +698,26 @@
             </div>
           `}
 
-          ${S.loading ? `<div class="att-muted">Laster…</div>` : `
-            <div class="att-table-wrap">
-              <table class="att-table">
-                <thead>
-                  <tr>
-                    <th>Kunde</th>
-                    <th>Prosjekt</th>
-                    <th>Avfallstype</th>
-                    <th>Status</th>
-                    <th>Dato (fra–til)</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${S.rows.map(r=>`
-                    <tr>
-                      <td>${esc(r.avfallsprod_kundenavn || r.account_id || "-")}</td>
-                      <td>${esc(r.prosjekt||"-")}</td>
-                      <td>${esc(r.avfall_velg_type||"-")}</td>
-                      <td>${statusPill(r.review_status)}</td>
-                      <td>${(r.dato_fra?new Date(r.dato_fra).toLocaleDateString('no-NO'):'-')} – ${(r.dato_til?new Date(r.dato_til).toLocaleDateString('no-NO'):'-')}</td>
-                      <td><button class="att-btn ghost" data-edit="${esc(r.id)}">Rediger</button></td>
-                    </tr>
-                  `).join("")}
-                  ${S.rows.length===0 ? `<tr><td colspan="6" class="att-muted">Ingen treff.</td></tr>` : ``}
-                </tbody>
-              </table>
-            </div>
+          <div class="att-table-wrap ${S.loading ? "is-loading" : ""}">
+            ${S.loading ? `<div class="att-table-mask">Laster…</div>` : ``}
+            <table class="att-table">
+              <thead>
+                ${tableHead}
+              </thead>
+              <tbody>
+                ${tableBody}
+                ${S.rows.length===0 && !S.loading ? `<tr><td colspan="${activeCols.length + 1}" class="att-muted">Ingen treff.</td></tr>` : ``}
+              </tbody>
+            </table>
+          </div>
 
-            <div class="att-foot">
-              <div class="att-pagination">
-                <button class="att-btn ghost" id="p-prev" ${S.page<=1?'disabled':''}>Forrige</button>
-                <span class="att-muted">Side ${S.page}${S.total?` av ${Math.max(1,Math.ceil(S.total/S.pageSize))}`:''}</span>
-                <button class="att-btn ghost" id="p-next" ${S.page>=Math.max(1,Math.ceil(S.total/S.pageSize))?'disabled':''}>Neste</button>
-              </div>
+          <div class="att-foot">
+            <div class="att-pagination">
+              <button class="att-btn ghost" id="p-prev" ${(S.page<=1 || S.loading)?'disabled':''}>Forrige</button>
+              <span class="att-muted">Side ${S.page}${S.total?` av ${Math.max(1,Math.ceil(S.total/S.pageSize))}`:''}</span>
+              <button class="att-btn ghost" id="p-next" ${(S.page>=Math.max(1,Math.ceil(S.total/S.pageSize)) || S.loading)?'disabled':''}>Neste</button>
             </div>
-          `}
+          </div>
         </div>
       </div>
 
@@ -711,6 +762,50 @@
 
     root.querySelector("#p-prev")?.addEventListener("click", ()=>{ if(S.page>1){ S.page--; silentFetchList(); }});
     root.querySelector("#p-next")?.addEventListener("click", ()=>{ const m=Math.max(1,Math.ceil(S.total/S.pageSize)); if(S.page<m){ S.page++; silentFetchList(); }});
+
+    const colBtn = root.querySelector("#adm-cols");
+    const colPanel = root.querySelector("#adm-col-panel");
+    colBtn?.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      S.colMenuOpen = !S.colMenuOpen;
+      render();
+    });
+    colPanel?.addEventListener("click", (e)=>e.stopPropagation());
+    root.querySelectorAll("[data-col]").forEach(ch=>{
+      ch.addEventListener("change", ()=>{
+        const key = ch.getAttribute("data-col");
+        if (!key) return;
+        const next = new Set(S.columns);
+        if (ch.checked) next.add(key);
+        else next.delete(key);
+        if (next.size === 0) return;
+        S.columns = Array.from(next);
+        saveColumnPrefs(S.columns);
+        render();
+      });
+    });
+    root.querySelectorAll("[data-col-preset]").forEach(btn=>{
+      btn.addEventListener("click", (e)=>{
+        e.preventDefault();
+        const preset = btn.getAttribute("data-col-preset");
+        if (preset === "all") {
+          S.columns = COLUMN_DEFS.map(c=>c.key);
+        } else {
+          S.columns = DEFAULT_COLUMNS.slice();
+        }
+        saveColumnPrefs(S.columns);
+        render();
+      });
+    });
+    if (S.colMenuOpen){
+      setTimeout(()=>{
+        document.addEventListener("click", ()=>{
+          if (!S.colMenuOpen) return;
+          S.colMenuOpen = false;
+          render();
+        }, { once:true });
+      }, 0);
+    }
 
     const dr = root.querySelector("#adm-drawer");
     root.querySelector("#x")?.addEventListener("click", closeDrawer);
